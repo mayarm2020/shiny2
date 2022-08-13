@@ -1,0 +1,33 @@
+---
+title: "week3"
+author: "Mayar Al Mohajer"
+date: "8/13/2022"
+output:
+  ioslides_presentation: default
+  beamer_presentation: default
+  slidy_presentation: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, message=FALSE,warning=FALSE)
+```
+
+
+
+## Slide with Plot
+
+
+```{r}
+
+set.seed(34)
+x <- runif(20, min=0, max=10)
+y<- runif(20, min=0, max=10)
+z <- rep(c(letters[1:4]),times=5)
+df <- data.frame(x,y,z)
+
+  library(plotly)
+plot_ly(df, x = ~x, y = ~y, mode="markers",color=~as.factor(z))
+
+```
+
+
