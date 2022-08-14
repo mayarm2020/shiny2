@@ -1,0 +1,295 @@
+---
+title: "Accidents"
+author: "Mayar Al Mohajer"
+date: "8/13/2022"
+output: ioslides_presentation
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## 2017 Car crash data in Allegheny County
+
+his Application uses data about car's accidents in Allegheny County in the US, To demonstrate various capabilities from the Developing Data Products Course.
+The Application provides visualization about car accidents in Allegheny County in 2017.
+
+
+- Using Shiny UI Server Application. 
+- Using Leaflet interactive MAP application. 
+- Adding customized markers, and Popup. 
+- Two Input Widget (Drop down list and Slide Bar).
+- Using Reactive function. 
+- Server Business logic (Subsetting data frame based on input).
+- Full help page (Documentation).
+
+
+## The Data
+
+- Data contains information on all accidents in Allegheny County in 2017.
+- Data used: Geo Location data. 
+- Months of the Accident. 
+- AUTOMOBILE_COUNT -  the number of cars involved. 
+- FATAL_COUNT - Total number of death. 
+- ILLEGAL_DRUG_RELATED - Ilegal drug involvement. 
+- DRINKING_DRIVER Number of Drunk People involved in the car accident. 
+- INJURY_COUNT - Number of injuries. 
+- Fatal And INJURY - Will be used to classifying the type of the accident 
+    And create different Icons. 
+
+
+
+## Data and Server calculations 
+
+The following calculations are done in the server :
+
+- Load data. 
+- Subset data - remove the accidents with zero cars involved. 
+- Remove NA items.
+- Create new columns which classify the accident (Death/Injury/None).
+- Check the Min and Max cars number involved and pass it to the slider input.
+- Slice the dataset dynamically based on Month selection and the number of cars selection. 
+
+
+## Data and Server calculation (Cont.)
+
+```{r, echo=FALSE,warning=FALSE,message=FALSE,comment=NA }
+library(tidyr)
+library(dplyr)
+DF<-read.csv("Allegheny.csv") 
+
+#Subset the location of the car crash (Latitude and longtiutiate)
+# To show the information on  a Leaflet MAP 
+
+#Subset only the accidents which the at least one car is involved.
+
+#Keep the data about the month of the accident.
+#Create a new column with the month's names instead of a number. 
+#Since there is a large number of the crash 
+#There will be an option to show car crash per specific month
+#For information to present in a popup :
+#AUTOMOBILE_COUNT -  the number of cars involved 
+#FATAL_COUNT - Total number of death 
+#ILLEGAL_DRUG_RELATED - Ilegal drug involvement 
+#DRINKING_DRIVER Number of Drunk People involved in the car accident 
+#INJURY_COUNT - Number of injuries 
+#Fatal And INJURY - Will be used to classifying the type of the accident 
+#And create different Icons 
+
+dfCrash<-select(DF,DEC_LAT,DEC_LONG,CRASH_MONTH,AUTOMOBILE_COUNT,DRINKING_DRIVER,
+                FATAL_COUNT,ILLEGAL_DRUG_RELATED,INJURY_COUNT,FATAL,INJURY)
+colnames(dfCrash)<-c("latitude","longitude","Month Crash","No.Cars.Involved","Drinking.Driver",
+                     "Death.Count","Drug.Involved","Injury.Count","Fatality.ind","Injury.ind")
+#Drop all NA columns
+dfCrash<-dfCrash %>% drop_na()
+
+#Create a column with the accident month names (instead of a number)
+dfCrash<-mutate(dfCrash,Month.Crash.Name=month.name[dfCrash$`Month Crash`])
+
+#Subset - remove all accident with zero cars 
+dfCrash <-subset(dfCrash,dfCrash$No.Cars.Involved > 0)
+DF.Crash.subset<-dfCrash
+
+#Create a Factor column to indicate Fatality, Injuries or no Fatalities or injuries 
+dfCrash = mutate(dfCrash,Death_Injuries = ifelse(dfCrash$Fatality.ind == 1,"Death",
+                               ifelse(dfCrash$Fatality.ind == 0 & dfCrash$Injury.ind==1,"Injury",
+                                      ifelse(dfCrash$Fatality.ind == 0 & dfCrash$Injury.ind==0,"None","None"))))
+                                              
+dfCrash$Death_Injuries<-as.factor(dfCrash$Death_Injuries)
+#Calculate the Maximum and Minimum number of cars involved 
+#Send it as output to the UI (Slider to select the range of cars involved) 
+Max_No_Car <- max(dfCrash$No.Cars.Involved)
+Min_No_Car <- min(dfCrash$No.Cars.Involved)
+
+DF.Crash.subset<-dfCrash
+
+str(dfCrash)
+
+```
+
+
+
+## Summary of accidents per classification 
+
+```{r echo=FALSE,comment=NA }
+table(dfCrash$Death_Injuries)
+```
+
+
+## Shiny App
+
+```{r, echo=FALSE}
+  
+library(leaflet)
+library(shiny)
+shinyApp(
+  
+
+ui = fluidPage( 
+  
+  tabsetPanel(
+    tabPanel("MapApp", fluid = TRUE,
+             
+             titlePanel("2017 Car crash data in Allegheny County"),
+             sidebarLayout(
+               sidebarPanel(
+                 #Slider to slice based on a month (or select all)
+                 selectInput(
+                   inputId =  "Month", 
+                   label = "Select Month:", 
+                   choices = c("All",month.name),
+                   selected = "All"
+                 ),
+                 
+                 #Create the slider for selecting the number of cars involved 
+                 #The slider is a dynamic slider, as the maximum and minuim values 
+                 # are based on the data 
+                 sliderInput("slider", "Select Number of Cars involve (Range)", min = 1,
+                             max = 10, value = 1,step= 1),
+                 
+                 
+                 #Submit button - control the changes       
+                 submitButton("Submit")
+                 
+               ),
+               #Main Panel 
+               mainPanel(
+                 #Render the MAP
+                 leafletOutput("map", width = "90%", height = "700px")
+               )
+             )
+    ),
+    tabPanel("Help", fluid = TRUE,
+             
+             tags$img(src='Help.png',width="700px",height="700px")
+             
+             
+    ))),
+
+
+server=(function(input, output,session) {
+  
+  #Load libraries   
+  library(leaflet)
+  library(tidyr)
+  library(dplyr)
+  
+  
+  # Read 2017 Car crash data in Allegheny County.
+  #  Data is loaded from :
+  #    https://data.wprdc.org/datastore/dump/bf8b3c7e-8d60-40df-9134-21606a451c1a
+  
+  DF<-read.csv("Allegheny.csv") 
+  
+  #Subset the location of the car crash (Latitude and longtiutiate)
+  # To show the information on  a Leaflet MAP 
+  
+  #Subset only the accidents which the at least one car is involved.
+  
+  #Keep the data about the month of the accident.
+  #Create a new column with the month's names instead of a number. 
+  #Since there is a large number of the crash 
+  #There will be an option to show car crash per specific month
+  #For information to present in a popup :
+  #AUTOMOBILE_COUNT -  the number of cars involved 
+  #FATAL_COUNT - Total number of death 
+  #ILLEGAL_DRUG_RELATED - Ilegal drug involvement 
+  #DRINKING_DRIVER Number of Drunk People involved in the car accident 
+  #INJURY_COUNT - Number of injuries 
+  #Fatal And INJURY - Will be used to classifying the type of the accident 
+  #And create different Icons 
+  
+  dfCrash<-select(DF,DEC_LAT,DEC_LONG,CRASH_MONTH,AUTOMOBILE_COUNT,DRINKING_DRIVER,
+                  FATAL_COUNT,ILLEGAL_DRUG_RELATED,INJURY_COUNT,FATAL,INJURY)
+  colnames(dfCrash)<-c("latitude","longitude","Month Crash","No.Cars.Involved","Drinking.Driver",
+                       "Death.Count","Drug.Involved","Injury.Count","Fatality.ind","Injury.ind")
+  #Drop all NA columns
+  dfCrash<-dfCrash %>% drop_na()
+  
+  #Create a column with the accident month names (instead of a number)
+  dfCrash<-mutate(dfCrash,Month.Crash.Name=month.name[dfCrash$`Month Crash`])
+  
+  #Subset - remove all accident with zero cars 
+  dfCrash <-subset(dfCrash,dfCrash$No.Cars.Involved > 0)
+  DF.Crash.subset<-dfCrash
+  
+  #Create a Factor column to indicate Fatality, Injuries or no Fatalities or injuries 
+  dfCrash = mutate(dfCrash,Death_Injuries = ifelse(dfCrash$Fatality.ind == 1,"Death",
+                                                   ifelse(dfCrash$Fatality.ind == 0 & dfCrash$Injury.ind==1,"Injury",
+                                                          ifelse(dfCrash$Fatality.ind == 0 & dfCrash$Injury.ind==0,"None","None"))))
+  
+  dfCrash$Death_Injuries<-as.factor(dfCrash$Death_Injuries)
+  #Calculate the Maximum and Minimum number of cars involved 
+  #Send it as output to the UI (Slider to select the range of cars involved) 
+  Max_No_Car <- max(dfCrash$No.Cars.Involved)
+  Min_No_Car <- min(dfCrash$No.Cars.Involved)
+  
+  DF.Crash.subset<-dfCrash
+  
+  
+  
+  #Icon's list 
+  CrashIcons <- iconList(
+    None = makeIcon("CarsIconGreen.png",iconWidth = 45, iconHeight = 45),
+    Death = makeIcon("CarsIconRed.png",iconWidth = 45, iconHeight = 45),
+    Injury = makeIcon("CarsIconYellow.png",iconWidth = 45, iconHeight = 45)
+  )
+  
+  #Use the Min and Max values to updates the slider input 
+  updateSliderInput(session, "slider", max=Max_No_Car,min=Min_No_Car)
+  
+  
+  #Reactive function to get the Selected month (or all year).
+  Month<- reactive({
+    input$Month
+  })
+  
+  
+  #Reactive function to get the Selected number of cars involved.
+  Cars<- reactive({
+    input$slider
+  })
+  
+  
+  #Create the MAP. 
+  output$map <- renderLeaflet({
+    
+    #Get the Month and slice the Data Frame accordingly.
+    Sel.Month<-Month()
+    if (Sel.Month == "All")
+      DF.Crash.subset<-dfCrash
+    else
+      DF.Crash.subset <-subset(dfCrash,dfCrash$Month.Crash.Name==Sel.Month)
+    
+    #Get No of Cars and slice the data frame accordingly.
+    Sel.Cars<-Cars()
+    DF.Crash.subset <-subset(DF.Crash.subset,DF.Crash.subset$No.Cars.Involved<=Sel.Cars)
+    
+    
+    
+    
+    #Build the MAP   
+    leaflet(DF.Crash.subset) %>%
+      addTiles()%>%  # Add default OpenStreetMap map tiles
+      #Add Markers and popup.
+      addMarkers(icon = ~CrashIcons[Death_Injuries],clusterOptions = markerClusterOptions(),
+                 popup = paste("Car involved:", DF.Crash.subset$No.Cars.Involved ,"<br>",
+                               "Fatality:",DF.Crash.subset$Death.Count,"<br>",
+                               "Injuries:",DF.Crash.subset$Injury.Count,"<br>",
+                               "Drugs Involved :", DF.Crash.subset$Drug.Involved,"<br>",
+                               " Alcohol involved:",DF.Crash.subset$Drinking.Driver))
+    
+    
+  })
+  
+  
+
+  
+})
+
+
+
+)
+
+```
